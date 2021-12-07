@@ -5,12 +5,12 @@
 // #include <sys/mman.h>
 #include <elf.h>
 #define MAX 0x2000
-unsigned char stub_code[] =	
+unsigned char stub_code[] = 	
 							"\x83\xec\x0c"			// sub	$0xc, %esp
-							"\x68\x78\x17\x0\x0"	// push $0xFB0 	在echo中，字符串将被保存在0xFB0处
-							"\xe8\x41\x0\x0\x0"	// call printf
+							"\x68\x80\x17\x0\x0"	// push $0xFB0 	在echo中，字符串将被保存在0xFB0处
+							"\xe8\x49\x0\x0\x0"	// call printf
 							"\x83\xc4\x10"			// add	$0x10, %esp
-//							"\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90"  // nop 填充，使得代码正好长0x10
+							"\xe8\x33\x0\x0\x0\x90\x90\x90"			// 返回start
 							; 
 
 #define RELJMP 	11
@@ -82,24 +82,27 @@ int main(int argc, char* argv[])
 	fd = open(argv[1], O_RDWR);			// 先将e_entry之前的部分原封不动的写回
 	write(fd, rdbuf, 0x18);
 	
-	write(fd, "\xF0\x0F\x0\x0", 4);		// 修改e_entry为0x00 00 0F F0
+	write(fd, "\xE8\x0F\x0\x0", 4);		// 修改e_entry为0x00 00 0F E8
 	
 	rp = rdbuf + 0x1c;
 	write(fd, rp, 0x1c);				// 原封不动的写回e_entry,p_offset之间的部分
 	
-	write(fd, "\xF0\x0F\x0\x0", 4);		// 将p_offset改为0x00 00 0F F0
+	write(fd, "\xE8\x0F\x0\x0", 4);		// 将p_offset改为0x00 00 0F E8
 	
 	rp = rdbuf + 0x3c;
-	write(fd, rp, 0xFB4);				// 0xFF0 - 0x38 - 0x4处继续填充
+	write(fd, rp, 0xFAC);				// 继续填充0xFE8 - 0x38 - 0x4个字节
 	
 	// 以下部分为shellcode填充
 	write(fd, stub_code, 11);
 	write(fd, "\x00", 1);
 	write(fd, stub_code + 12, 4);
+	write(fd, stub_code + 16, 3);
+	write(fd, "\x00", 1);
+	write(fd, stub_code + 20, 4);
 
 	// 以下部分为使pwd正常工作，将push 0x1768 改为 0x1778
 	write(fd, rdbuf + 0x1000, 0x14);
-	write(fd, "\x68\x78", 2);
+	write(fd, "\x68\x80", 2);
 	
 	close(fd);
 
